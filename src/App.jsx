@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   UserPlus, Pencil, Trash2, Shuffle, ArrowLeft, X, Users, UserX, CheckCircle2,
-  Timer, Plus, Minus,
+  Timer, Plus, Minus, Play, Pause, RotateCcw,
 } from 'lucide-react';
 
 import { drawTeams, teamAvg, teamSum } from './algorithm.js';
@@ -702,12 +702,42 @@ function BenchRow({ player, onAdd }) {
   );
 }
 
+const GAME_DURATION = 10 * 60; // 10 minutos em segundos
+
+function formatTime(s) {
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function GameScreen({
   gameState, allPresentPlayers,
   onBack, onAddToQueue, onRemoveFromQueue, onMarkLoser, onSortearProximo,
 }) {
   const [isSorteando, setIsSorteando] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+  const [timerRunning, setTimerRunning] = useState(false);
+
   const { playingTeams, queue, transitandoIds, teamSize } = gameState;
+
+  useEffect(() => {
+    if (!timerRunning || timeLeft <= 0) return;
+    const id = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) { setTimerRunning(false); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timerRunning, timeLeft]);
+
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setTimeLeft(GAME_DURATION);
+  };
+
+  const handleMarkLoser = (teamIdx) => {
+    resetTimer();
+    onMarkLoser(teamIdx);
+  };
 
   const playingIds = new Set(playingTeams.flat().map(p => p.id));
   const queueIds = new Set(queue.map(p => p.id));
@@ -715,6 +745,7 @@ function GameScreen({
 
   const canDraw = queue.length >= teamSize;
   const needMore = queue.length > 0 && queue.length < teamSize;
+  const isTimeUp = timeLeft === 0;
 
   const handleSortear = () => {
     if (!canDraw) return;
@@ -760,6 +791,76 @@ function GameScreen({
       </header>
 
       <main style={{ padding: '16px 16px 60px', maxWidth: 560, margin: '0 auto' }}>
+
+        {/* TIMER */}
+        {(() => {
+          const timerColor = isTimeUp ? '#EF4444' : timerRunning ? '#D0FF14' : '#FAFAFA';
+          const borderColor = isTimeUp
+            ? 'rgba(239,68,68,0.3)'
+            : timerRunning ? 'rgba(208,255,20,0.25)' : '#1F1F1F';
+          return (
+            <div style={{
+              background: '#0F0F0F',
+              border: `1px solid ${borderColor}`,
+              borderRadius: 20, padding: '18px 18px 14px',
+              marginBottom: 20, textAlign: 'center',
+              transition: 'border 0.3s',
+            }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+                color: '#52525B', marginBottom: 6,
+              }}>
+                TEMPO DE JOGO
+              </div>
+              <div className="display num" style={{
+                fontSize: 68, lineHeight: 1, color: timerColor,
+                marginBottom: 14, transition: 'color 0.3s',
+              }}>
+                {formatTime(timeLeft)}
+              </div>
+              {isTimeUp && (
+                <div style={{
+                  fontSize: 11, fontWeight: 700, color: '#EF4444',
+                  letterSpacing: '0.1em', marginBottom: 10,
+                }}>
+                  TEMPO ESGOTADO
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => { if (!isTimeUp) setTimerRunning(r => !r); }}
+                  disabled={isTimeUp}
+                  style={{
+                    flex: 1, height: 42,
+                    background: (!timerRunning && !isTimeUp) ? '#D0FF14' : '#1F1F1F',
+                    color: (!timerRunning && !isTimeUp) ? '#0A0A0A' : isTimeUp ? '#52525B' : '#FAFAFA',
+                    borderRadius: 11, fontSize: 13, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    border: timerRunning ? '1px solid #2a2a2a' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {timerRunning
+                    ? <><Pause size={15} strokeWidth={2.5} /> PAUSAR</>
+                    : <><Play size={15} strokeWidth={2.5} /> {isTimeUp ? 'ENCERRADO' : 'INICIAR'}</>}
+                </button>
+                <button
+                  onClick={resetTimer}
+                  style={{
+                    width: 42, height: 42,
+                    background: '#1F1F1F', borderRadius: 11,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#71717A', border: '1px solid #2a2a2a',
+                  }}
+                  aria-label="Reiniciar timer"
+                >
+                  <RotateCcw size={15} />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* EM CAMPO */}
         <SectionHeader
           title="EM CAMPO"
@@ -781,7 +882,7 @@ function GameScreen({
                 key={i}
                 team={team}
                 theme={TEAM_THEMES[i % TEAM_THEMES.length]}
-                onLoser={() => onMarkLoser(i)}
+                onLoser={() => handleMarkLoser(i)}
               />
             ))}
           </div>

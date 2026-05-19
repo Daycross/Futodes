@@ -16,6 +16,8 @@
   - Fila ordenada com badge TRANSITANDO (prioridade garantida no próximo sorteio)
   - Sortear Próximo Time: transitandos entram primeiro, restante aleatório
   - Adicionar jogadores do banco direto à fila
+- [x] **Timer de 10 minutos** — countdown no GameScreen com play/pause/reset
+  - Reseta automaticamente ao apertar PERDEU (novo jogo começa)
 
 ---
 
