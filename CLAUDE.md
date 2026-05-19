@@ -1,5 +1,7 @@
 # Futodes — Claude Code Project Guide
 
+> **Sempre leia [`SPRINTS.md`](./SPRINTS.md) no início de cada sessão** para saber o que já foi feito e o que vem a seguir.
+
 ## O que é o projeto
 
 Aplicativo mobile-first de gerenciamento de times para peladas (futsal/futebol casual). Permite cadastrar jogadores com notas, escalar quem vai jogar, sortear times equilibrados, e gerenciar a fila de próximos jogadores.
