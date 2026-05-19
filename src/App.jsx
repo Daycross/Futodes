@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  UserPlus, Pencil, Trash2, Shuffle, ArrowLeft, X, Users, UserX, CheckCircle2
+  UserPlus, Pencil, Trash2, Shuffle, ArrowLeft, X, Users, UserX, CheckCircle2,
+  Timer, Plus, Minus,
 } from 'lucide-react';
 
 import { drawTeams, teamAvg, teamSum } from './algorithm.js';
@@ -564,6 +565,303 @@ function EmptyState({ onAdd }) {
 }
 
 // ============================================================================
+// Componentes de jogo em andamento
+// ============================================================================
+
+function PlayingTeamCard({ team, theme, onLoser }) {
+  const avg = teamAvg(team);
+  return (
+    <div style={{
+      background: '#0F0F0F',
+      border: `1px solid ${theme.accent}33`,
+      borderRadius: 20,
+      overflow: 'hidden',
+      marginBottom: 12,
+    }}>
+      <div style={{
+        padding: '14px 16px',
+        background: theme.accent, color: theme.dark,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div>
+          <div className="display" style={{ fontSize: 24, lineHeight: 1 }}>{theme.name}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.65, marginTop: 2, letterSpacing: '0.05em' }}>
+            EM CAMPO
+          </div>
+        </div>
+        <div className="display num" style={{ fontSize: 32 }}>{avg.toFixed(1)}</div>
+      </div>
+      <div style={{ padding: '6px 14px 0' }}>
+        {team.map((p, i) => (
+          <div key={p.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 4px',
+            borderBottom: i < team.length - 1 ? '1px solid #1F1F1F' : 'none',
+          }}>
+            <RatingBadge rating={p.rating} size="sm" />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {p.name}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '10px 14px 14px' }}>
+        <button
+          onClick={onLoser}
+          style={{
+            width: '100%', padding: '10px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.28)',
+            borderRadius: 10,
+            color: '#EF4444', fontWeight: 700, fontSize: 13,
+            letterSpacing: '0.04em',
+          }}
+        >
+          PERDEU — SAIR
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QueueRow({ player, position, isTransitando, onRemove }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '11px 14px',
+      background: isTransitando ? 'rgba(208, 255, 20, 0.05)' : '#0F0F0F',
+      border: `1px solid ${isTransitando ? 'rgba(208, 255, 20, 0.2)' : '#1F1F1F'}`,
+      borderRadius: 14, marginBottom: 8,
+      transition: 'background 0.15s, border 0.15s',
+    }}>
+      <div className="display num" style={{
+        width: 26, height: 26,
+        background: isTransitando ? '#D0FF14' : '#1F1F1F',
+        color: isTransitando ? '#0A0A0A' : '#52525B',
+        borderRadius: 7,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 13, flexShrink: 0,
+        transition: 'all 0.15s',
+      }}>
+        {position}
+      </div>
+      <RatingBadge rating={player.rating} size="sm" />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {player.name}
+        </div>
+        {isTransitando && (
+          <div style={{ fontSize: 10, color: '#D0FF14', fontWeight: 700, marginTop: 1, letterSpacing: '0.08em' }}>
+            TRANSITANDO
+          </div>
+        )}
+      </div>
+      <button
+        onClick={() => onRemove(player.id)}
+        style={{
+          width: 32, height: 32,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 8, color: '#52525B',
+          flexShrink: 0,
+        }}
+        aria-label="Remover da fila"
+      >
+        <Minus size={16} />
+      </button>
+    </div>
+  );
+}
+
+function BenchRow({ player, onAdd }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 14px',
+      background: '#0F0F0F', border: '1px solid #1F1F1F',
+      borderRadius: 14, marginBottom: 8,
+    }}>
+      <RatingBadge rating={player.rating} size="sm" />
+      <div style={{ flex: 1, fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#A1A1AA' }}>
+        {player.name}
+      </div>
+      <button
+        onClick={() => onAdd(player)}
+        style={{
+          width: 32, height: 32,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(208, 255, 20, 0.1)',
+          border: '1px solid rgba(208, 255, 20, 0.2)',
+          borderRadius: 8, color: '#D0FF14',
+          flexShrink: 0,
+        }}
+        aria-label="Adicionar à fila"
+      >
+        <Plus size={16} />
+      </button>
+    </div>
+  );
+}
+
+function GameScreen({
+  gameState, allPresentPlayers,
+  onBack, onAddToQueue, onRemoveFromQueue, onMarkLoser, onSortearProximo,
+}) {
+  const [isSorteando, setIsSorteando] = useState(false);
+  const { playingTeams, queue, transitandoIds, teamSize } = gameState;
+
+  const playingIds = new Set(playingTeams.flat().map(p => p.id));
+  const queueIds = new Set(queue.map(p => p.id));
+  const bench = allPresentPlayers.filter(p => !playingIds.has(p.id) && !queueIds.has(p.id));
+
+  const canDraw = queue.length >= teamSize;
+  const needMore = queue.length > 0 && queue.length < teamSize;
+
+  const handleSortear = () => {
+    if (!canDraw) return;
+    setIsSorteando(true);
+    onSortearProximo();
+    setTimeout(() => setIsSorteando(false), 600);
+  };
+
+  return (
+    <>
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(10, 10, 10, 0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        padding: '16px 16px 18px',
+        paddingTop: 'calc(16px + env(safe-area-inset-top))',
+        borderBottom: '1px solid #1F1F1F',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={onBack}
+            style={{
+              width: 40, height: 40, borderRadius: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#1F1F1F', color: '#FAFAFA',
+            }}
+            aria-label="Voltar"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="display" style={{ fontSize: 28, margin: 0, lineHeight: 0.9 }}>
+              JOGO EM ANDAMENTO
+            </h1>
+            <div style={{ fontSize: 12, color: '#71717A', fontWeight: 500, marginTop: 4 }}>
+              <span className="num" style={{ color: '#FAFAFA' }}>{playingTeams.length}</span> time(s) em campo
+              <span style={{ margin: '0 6px', color: '#404040' }}>·</span>
+              <span className="num" style={{ color: '#D0FF14' }}>{queue.length}</span> na fila
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ padding: '16px 16px 60px', maxWidth: 560, margin: '0 auto' }}>
+        {/* EM CAMPO */}
+        <SectionHeader
+          title="EM CAMPO"
+          count={playingTeams.reduce((s, t) => s + t.length, 0)}
+          accent="#FAFAFA"
+        />
+        {playingTeams.length === 0 ? (
+          <div style={{
+            padding: '24px 16px', textAlign: 'center',
+            background: '#0F0F0F', border: '1px dashed #262626',
+            borderRadius: 14, marginBottom: 24, color: '#52525B', fontSize: 13,
+          }}>
+            Nenhum time em campo
+          </div>
+        ) : (
+          <div style={{ marginBottom: 8 }}>
+            {playingTeams.map((team, i) => (
+              <PlayingTeamCard
+                key={i}
+                team={team}
+                theme={TEAM_THEMES[i % TEAM_THEMES.length]}
+                onLoser={() => onMarkLoser(i)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* PRÓXIMOS */}
+        <SectionHeader
+          title="PRÓXIMOS"
+          count={queue.length}
+          accent="#D0FF14"
+        />
+        {queue.length === 0 ? (
+          <div style={{
+            padding: '24px 16px', textAlign: 'center',
+            background: '#0F0F0F', border: '1px dashed #262626',
+            borderRadius: 14, marginBottom: 12, color: '#52525B', fontSize: 13,
+          }}>
+            Fila vazia — adicione jogadores abaixo
+          </div>
+        ) : (
+          <div>
+            {queue.map((p, i) => (
+              <QueueRow
+                key={p.id}
+                player={p}
+                position={i + 1}
+                isTransitando={transitandoIds.includes(p.id)}
+                onRemove={onRemoveFromQueue}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Botão de sortear / aviso */}
+        {canDraw ? (
+          <button
+            onClick={handleSortear}
+            style={{
+              width: '100%', padding: '16px', marginTop: 4, marginBottom: 24,
+              background: '#D0FF14', color: '#0A0A0A',
+              borderRadius: 14, fontSize: 15, fontWeight: 800,
+              letterSpacing: '0.04em',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              boxShadow: '0 4px 24px rgba(208, 255, 20, 0.25)',
+            }}
+          >
+            <Shuffle size={18} strokeWidth={2.6} className={isSorteando ? 'spin' : ''} />
+            SORTEAR PRÓXIMO TIME ({teamSize})
+          </button>
+        ) : needMore ? (
+          <div style={{
+            marginTop: 4, marginBottom: 24, padding: '14px 16px',
+            background: '#0F0F0F', borderRadius: 12, border: '1px solid #1F1F1F',
+            fontSize: 13, color: '#71717A', textAlign: 'center',
+          }}>
+            Faltam <span className="num" style={{ color: '#FAFAFA' }}>{teamSize - queue.length}</span> jogador(es) para sortear
+          </div>
+        ) : (
+          <div style={{ marginBottom: 16 }} />
+        )}
+
+        {/* ADICIONAR À FILA */}
+        {bench.length > 0 && (
+          <>
+            <SectionHeader
+              title="ADICIONAR À FILA"
+              count={bench.length}
+              accent="#71717A"
+            />
+            {bench.map(p => (
+              <BenchRow key={p.id} player={p} onAdd={onAddToQueue} />
+            ))}
+          </>
+        )}
+      </main>
+    </>
+  );
+}
+
+// ============================================================================
 // Tela de times sorteados
 // ============================================================================
 
@@ -632,7 +930,15 @@ function TeamCard({ team, theme, index }) {
   );
 }
 
-function TeamsScreen({ teams, onBack, onRedraw }) {
+function TeamsScreen({ teams, onBack, onRedraw, onStartGame }) {
+  const [isRedrawing, setIsRedrawing] = useState(false);
+
+  const handleRedraw = () => {
+    setIsRedrawing(true);
+    onRedraw();
+    setTimeout(() => setIsRedrawing(false), 600);
+  };
+
   const avgs = teams.map(teamAvg);
   const maxAvg = Math.max(...avgs);
   const minAvg = Math.min(...avgs);
@@ -726,27 +1032,43 @@ function TeamsScreen({ teams, onBack, onRedraw }) {
 
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '16px 16px calc(16px + env(safe-area-inset-bottom))',
-        background: 'linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0.95) 30%)',
+        padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
+        background: 'linear-gradient(180deg, rgba(10,10,10,0) 0%, rgba(10,10,10,0.97) 28%)',
         zIndex: 5,
         pointerEvents: 'none',
       }}>
         <div style={{
           maxWidth: 560, margin: '0 auto', pointerEvents: 'auto',
+          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
           <button
-            onClick={onRedraw}
+            onClick={onStartGame}
             style={{
-              width: '100%', height: 60,
-              background: '#1F1F1F', color: '#FAFAFA',
-              borderRadius: 16,
-              fontSize: 15, fontWeight: 700,
+              width: '100%', height: 56,
+              background: '#D0FF14', color: '#0A0A0A',
+              borderRadius: 14,
+              fontSize: 15, fontWeight: 800,
               letterSpacing: '0.04em',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              border: '1px solid #404040',
+              boxShadow: '0 8px 32px rgba(208, 255, 20, 0.25)',
             }}
           >
-            <Shuffle size={18} strokeWidth={2.6} />
+            <Timer size={18} strokeWidth={2.6} />
+            INICIAR JOGO
+          </button>
+          <button
+            onClick={handleRedraw}
+            style={{
+              width: '100%', height: 50,
+              background: '#1F1F1F', color: '#FAFAFA',
+              borderRadius: 14,
+              fontSize: 14, fontWeight: 700,
+              letterSpacing: '0.04em',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              border: '1px solid #333333',
+            }}
+          >
+            <Shuffle size={16} strokeWidth={2.6} className={isRedrawing ? 'spin' : ''} />
             SORTEAR NOVAMENTE
           </button>
         </div>
@@ -762,9 +1084,11 @@ function TeamsScreen({ teams, onBack, onRedraw }) {
 export default function App() {
   const [players, setPlayers] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [view, setView] = useState('roster'); // 'roster' | 'teams'
+  const [view, setView] = useState('roster'); // 'roster' | 'teams' | 'game'
   const [teams, setTeams] = useState([]);
   const [sheet, setSheet] = useState(null);
+  const [gameState, setGameState] = useState(null);
+  // gameState = { playingTeams, queue, transitandoIds, teamSize }
 
   useEffect(() => {
     setPlayers(loadPlayers());
@@ -809,7 +1133,74 @@ export default function App() {
     const result = drawTeams(players);
     if (result.length === 0) return;
     setTeams(result);
+    setGameState(null); // reset game state on new draw
     setView('teams');
+  };
+
+  const startGame = () => {
+    if (!teams || teams.length < 2) return;
+    const teamSize = teams[0].length;
+    setGameState({
+      playingTeams: teams.slice(0, 2),
+      queue: teams.slice(2).flat(),
+      transitandoIds: [],
+      teamSize,
+    });
+    setView('game');
+  };
+
+  const addToGameQueue = (player) => {
+    setGameState(prev => ({ ...prev, queue: [...prev.queue, player] }));
+  };
+
+  const removeFromGameQueue = (playerId) => {
+    setGameState(prev => ({
+      ...prev,
+      queue: prev.queue.filter(p => p.id !== playerId),
+      transitandoIds: prev.transitandoIds.filter(id => id !== playerId),
+    }));
+  };
+
+  const markGameLoser = (teamIdx) => {
+    setGameState(prev => {
+      const losingTeam = prev.playingTeams[teamIdx];
+      return {
+        ...prev,
+        playingTeams: prev.playingTeams.filter((_, i) => i !== teamIdx),
+        queue: [...prev.queue, ...losingTeam],
+      };
+    });
+  };
+
+  const sortearProximoTime = () => {
+    setGameState(prev => {
+      if (prev.queue.length < prev.teamSize) return prev;
+
+      // Transitando players get guaranteed spots first
+      const transitando = prev.queue.filter(p => prev.transitandoIds.includes(p.id));
+      const normal = prev.queue.filter(p => !prev.transitandoIds.includes(p.id));
+
+      let newTeam, remaining;
+      if (transitando.length >= prev.teamSize) {
+        // More transitando than slots — shuffle among them
+        const shuffled = [...transitando].sort(() => Math.random() - 0.5);
+        newTeam = shuffled.slice(0, prev.teamSize);
+        remaining = [...shuffled.slice(prev.teamSize), ...normal];
+      } else {
+        // Fill guaranteed transitando spots then randomly pick the rest
+        const slotsLeft = prev.teamSize - transitando.length;
+        const shuffledNormal = [...normal].sort(() => Math.random() - 0.5);
+        newTeam = [...transitando, ...shuffledNormal.slice(0, slotsLeft)];
+        remaining = shuffledNormal.slice(slotsLeft);
+      }
+
+      return {
+        ...prev,
+        playingTeams: [...prev.playingTeams, newTeam],
+        queue: remaining,
+        transitandoIds: remaining.map(p => p.id), // survivors have priority next round
+      };
+    });
   };
 
   if (!loaded) {
@@ -825,7 +1216,24 @@ export default function App() {
 
   return (
     <>
-      {view === 'roster' ? (
+      {view === 'game' && gameState ? (
+        <GameScreen
+          gameState={gameState}
+          allPresentPlayers={players.filter(p => p.present)}
+          onBack={() => setView('teams')}
+          onAddToQueue={addToGameQueue}
+          onRemoveFromQueue={removeFromGameQueue}
+          onMarkLoser={markGameLoser}
+          onSortearProximo={sortearProximoTime}
+        />
+      ) : view === 'teams' ? (
+        <TeamsScreen
+          teams={teams}
+          onBack={() => setView('roster')}
+          onRedraw={sortear}
+          onStartGame={startGame}
+        />
+      ) : (
         <RosterScreen
           players={players}
           onTogglePresence={togglePresence}
@@ -834,12 +1242,6 @@ export default function App() {
           onSortear={sortear}
           onSelectAll={selectAll}
           onClearSelection={clearSelection}
-        />
-      ) : (
-        <TeamsScreen
-          teams={teams}
-          onBack={() => setView('roster')}
-          onRedraw={sortear}
         />
       )}
 

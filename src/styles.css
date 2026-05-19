@@ -67,3 +67,12 @@ input::placeholder {
 .fade-in { animation: fadeIn 0.2s ease; }
 .slide-up { animation: slideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
 .pop-in { animation: popIn 0.32s cubic-bezier(0.32, 0.72, 0, 1) both; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.55s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+}
